@@ -24,12 +24,12 @@ def info_admin(cursor) -> str:
 @db
 def add_perfume(cursor, new_perfume):
     perfume = new_perfume.split(',')
-    brand = perfume[0]
-    name = perfume[1]
-    full_price = perfume[2]
-    three_ml = perfume[3]
-    five_ml = perfume[4]
-    ten_ml = perfume[5]
+    brand = perfume[0].strip()
+    name = perfume[1].strip()
+    full_price = perfume[2].strip()
+    three_ml = perfume[3].strip()
+    five_ml = perfume[4].strip()
+    ten_ml = perfume[5].strip()
     cursor.execute(
         """INSERT INTO perfumes(brand_name, name, price, price_3ml, price_5ml, price_10ml) VALUES(?,?,?,?,?,?)""",
         (brand, name, full_price, three_ml, five_ml, ten_ml))
@@ -48,6 +48,7 @@ def replace_photo(cursor, photo, perfume):
 
 @db
 def replace_price(cursor, perfume, price):
+    """Замена цены парфюма"""
     price = [int(i.strip()) for i in price.split(',')]
     cursor.execute(f"""UPDATE perfumes SET price='{price[0]}', price_3ml='{price[1]}', price_5ml='{price[2]}',
      price_10ml='{price[3]}' WHERE name = '{perfume}'""")

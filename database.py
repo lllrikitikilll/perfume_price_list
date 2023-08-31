@@ -8,6 +8,7 @@ def db(func):
     def wrapper(*args, **kwargs):
         conn = sqlite3.connect('perfume.db')
         cursor = conn.cursor()
+        cursor.execute('''PRAGMA journal_mode=WAL''')
         data = func(cursor=cursor, *args, **kwargs)
         conn.commit()
         conn.close()
@@ -46,7 +47,7 @@ def get_brands_with_alpha(cursor, call: CallbackQuery | str):
     else:
         alpha = call
     if alpha[0].isdigit():
-        res = cursor.execute("""SELECT DISTINCT brand_name FROM perfumes WHERE substr(brand_name, 1, 1) 
+        res = cursor.execute("""SELECT DISTINCT brand_name FROM perfumes WHERE substr(brand_name, 1, 1)
                                 BETWEEN '0' AND '9'""")
     else:
         res = cursor.execute(f"SELECT DISTINCT brand_name FROM perfumes WHERE brand_name LIKE '{alpha.upper()}%' ")
@@ -57,16 +58,17 @@ def get_brands_with_alpha(cursor, call: CallbackQuery | str):
 @db
 def get_one_perfume(cursor, call: CallbackQuery) -> tuple:
     """Возвращает текст с описанием парфюма"""
-    data = cursor.execute(f"""SELECT name, brand_name, price, price_3ml, price_5ml, price_10ml, photo
-                                 FROM perfumes WHERE name == '{call.data.strip()}'""")
+    value = call.data
+    data = cursor.execute("""SELECT name, brand_name, price, price_3ml, price_5ml, price_10ml, photo
+                                 FROM perfumes WHERE name = ?""", (value,))
     perfume = data.fetchone()
-    text = ''
-    text += f'{perfume[1]} {perfume[0]}\n'
+    text = f'{perfume[1]} {perfume[0]}\n'
     text += f'Цена за флакон: {int(perfume[2])} р.\n'
     text += f'Цена за 3мл: {int(perfume[3])} р.\n'
     text += f'Цена за 5мл: {int(perfume[4])} р.\n'
     text += f'Цена за 10мл: {int(perfume[5])} р.\n'
-    text += f'{"_" * 30}\n\n'
+    text += '_'*30+'\n'
+    text += 'Контакт для заказа @fdrpnn'
     return text, perfume[-1]
 
 

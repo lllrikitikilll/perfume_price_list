@@ -9,7 +9,7 @@ from telebot.types import Message, CallbackQuery, InlineKeyboardButton
 from database import get_ban_list, save_user_in_db, save_current_message_id, last_command, get_brands_with_alpha, \
     get_all_brands, get_brand_perfumes, get_one_perfume
 
-from admin_utils import replace_photo, replace_price, add_perfume, del_perfume, info_admin
+from admin_utils import replace_photo, replace_price, add_perfume, del_perfume, info_admin, get_list_users
 from utils import print_user_command, do_markup
 
 load_dotenv('./config.env')
@@ -58,6 +58,10 @@ def restart(func):
         try:
             func(message)
         except Exception as e:
+
+            if "Error code: 400" in str(e):
+                print("Незачем модифицировать")
+                return
             print(e)
             if isinstance(message, Message):
                 to = message.from_user.id
@@ -70,7 +74,7 @@ def restart(func):
     return wrapper
 
 
-@bot.message_handler(commands=['info', 'price', 'add', 'del'])
+@bot.message_handler(commands=['info', 'users', 'price', 'add', 'del'])
 @admin
 def admin_command(message: Message):
     """Отправляет ответы только на команды администратора"""
@@ -79,20 +83,22 @@ def admin_command(message: Message):
             # Статистика посещений
             text = info_admin()
             bot.send_message(message.from_user.id, text)
-        case ['/price', price] if len(price.split(',')) == 4 and all(list(map(lambda x: x.strip().isdigit(),
-                                                                              price.split(',')))):
+        case ['/price', *price] if all(map(lambda x: x.isdigit(), price)):
             # Поменять цену парфюма
             perfume = last_command(user=message, option='get', value='last_perfume')
-            replace_price(perfume=perfume, price=price)
+            replace_price(perfume=perfume, price=(price[0], price[1], price[2], price[3]))
             bot.send_message(message.from_user.id, "Цена изменена\n/start")
-        case ['/add', str(new_perfume)] if len(new_perfume.split(',')) == 6:
+        case ['/add', str(brand), str(name), *price] if all(map(lambda x: x.isdigit(), price)):
             # Добавить парфюм
-            add_perfume(new_perfume=new_perfume)
-            bot.send_message(message.from_user.id, f"Добавлен: {new_perfume.split(',')[0]}")
+            add_perfume(new_perfume=(brand, name, price[0], [1], price[2], price[3]))
+            bot.send_message(message.from_user.id, f"Добавлен: {brand} {name}")
         case ['/del', str(name)]:
             # Удалить парфюм
             del_perfume(name=name)
             bot.send_message(message.from_user.id, f"Удален парфюм: {name}")
+        case ['/users']:
+            # Показать пользователей
+            bot.send_message(message.from_user.id, get_list_users())
         case _:
             bot.send_message(message.from_user.id, "Ошибка в команде")
 
@@ -100,6 +106,7 @@ def admin_command(message: Message):
 @bot.message_handler(content_types=['document'])
 @admin
 def handle_docs_photo(message: Message):
+    """Изменить фото парфюма"""
     try:
         brand = last_command(user=message, option='get', value='last_brand')
         perfume = last_command(user=message, option='get', value='last_perfume')
@@ -121,7 +128,7 @@ def handle_docs_photo(message: Message):
 def start_bot(message: Message):
     """Обработчик команд пользователей"""
     print_user_command(message)
-    last_command(user=message, option='save')
+    #last_command(user=message, option='save')
     match message.text:
         case '/start':
             old_user = save_user_in_db(user=message)
@@ -149,7 +156,7 @@ def just_see(message):
 @ban
 def callback(call: CallbackQuery):
     """Обработчик inline кнопок с продукцией"""
-    last_command(user=call, option='save')
+    #last_command(user=call, option='save')
     print_user_command(call)
     # Поиск по первой букве, возвращает бренды
     if call.data in ALPHA:
@@ -190,7 +197,7 @@ def callback(call: CallbackQuery):
     # Возврат на страницу с буквами
     elif call.data == 'back_to_alpha':
         markup = do_markup(ALPHA, row=5)
-        bot.edit_message_text(f"🔠 Выберите бренд, начинающийся с указанной буквы:", call.message.chat.id,
+        bot.edit_message_text("🔠 Выберите бренд, начинающийся с указанной буквы:", call.message.chat.id,
                               call.message.id, reply_markup=markup)
 
     # Возврат на страницу с брендами

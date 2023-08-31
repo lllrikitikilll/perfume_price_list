@@ -19,3 +19,4 @@ def do_markup(data, row=5):
         dct[item] = {'callback_data': item}
     markup = quick_markup(dct, row_width=row)
     return markup
+

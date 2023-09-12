@@ -78,19 +78,19 @@ def restart(func):
 @admin
 def admin_command(message: Message):
     """Отправляет ответы только на команды администратора"""
-    match message.text.split():
+    match list(map(lambda x: x.strip(), message.text.split(','))):
         case ['/info']:
             # Статистика посещений
             text = info_admin()
             bot.send_message(message.from_user.id, text)
-        case ['/price', *price] if all(map(lambda x: x.isdigit(), price)):
+        case ['/price', price] if price.isdigit():
             # Поменять цену парфюма
             perfume = last_command(user=message, option='get', value='last_perfume')
-            replace_price(perfume=perfume, price=(price[0], price[1], price[2], price[3]))
+            replace_price(perfume=perfume, price=int(price))
             bot.send_message(message.from_user.id, "Цена изменена\n/start")
-        case ['/add', str(brand), str(name), *price] if all(map(lambda x: x.isdigit(), price)):
+        case ['/add', str(brand), str(name), price] if price.isdigit():
             # Добавить парфюм
-            add_perfume(new_perfume=(brand, name, price[0], [1], price[2], price[3]))
+            add_perfume(new_perfume=(brand, name, int(price)))
             bot.send_message(message.from_user.id, f"Добавлен: {brand} {name}")
         case ['/del', str(name)]:
             # Удалить парфюм

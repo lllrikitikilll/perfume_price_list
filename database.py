@@ -6,7 +6,7 @@ from telebot.types import Message, CallbackQuery
 
 def db(func):
     def wrapper(*args, **kwargs):
-        conn = sqlite3.connect('perfume.db')
+        conn = sqlite3.connect('perfume09.db')
         cursor = conn.cursor()
         cursor.execute('''PRAGMA journal_mode=WAL''')
         data = func(cursor=cursor, *args, **kwargs)

@@ -1,4 +1,5 @@
 import datetime
+from math import ceil
 
 from telebot.types import Message, CallbackQuery
 from telebot.util import quick_markup
@@ -20,3 +21,6 @@ def do_markup(data, row=5):
     markup = quick_markup(dct, row_width=row)
     return markup
 
+
+def round_price(price):
+    return int(ceil(price / 50)) * 50

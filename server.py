@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 import telebot
@@ -7,14 +8,18 @@ from telebot.apihelper import delete_message
 from telebot.types import Message, CallbackQuery, InlineKeyboardButton
 
 from database import get_ban_list, save_user_in_db, save_current_message_id, last_command, get_brands_with_alpha, \
-    get_all_brands, get_brand_perfumes, get_one_perfume
+    get_all_brands, get_brand_perfumes, get_one_perfume, get_lifetime
 
-from admin_utils import replace_photo, replace_price, add_perfume, del_perfume, info_admin, get_list_users
+from admin_utils import replace_photo, replace_price, add_perfume, del_perfume, \
+    info_admin, get_list_users, ban_user, get_all_users_with_id
 from utils import print_user_command, do_markup
 
 load_dotenv('./config.env')
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 ADMIN = os.getenv('TELEGRAM_ADMIN')
+
+ADMIN_ONLINE = {406955270: 0, 242431053: 0, 887078398: 0}
+
 
 ALPHA = list("ABCEFGHIJKLMNOPRSTVWZ")
 ALPHA.append('123...')  # начальные буквы парфюма
@@ -45,8 +50,30 @@ def ban(func):
         banned = get_ban_list(user_id=user_id)
         if type(banned) is tuple and banned[0] == 1:
             print_user_command(message)
-            return bot.send_message(user_id, 'Ошибка, разбираемся')
+            return bot.send_message(user_id, 'Хммм... Что-то тут не так...')
         return func(message)
+
+    return wrapper
+
+
+def lifetime(func):
+    def wrapper(message: Message | CallbackQuery):
+        if isinstance(message, Message):
+            user_id = message.from_user.id
+        else:
+            user_id = message.message.chat.id
+        time_start = get_lifetime(user_id=user_id)
+        if time_start and (datetime.now() - datetime.strptime(time_start[0], '%Y-%m-%d %H:%M:%S.%f')).days > 2:
+            markup = do_markup(ALPHA, row=5)  # Создаем алфавитные кнопки шириной в 5 столбцов
+            text = "🔠 Выберите бренд, начинающийся с указанной буквы:"
+            photo = open('photo_2023-08-29_20-59-00.jpg', 'rb')
+            # bot.edit_message_text(chat_id=user_id, text="Смотри ниже",
+            #                       message_id=save_current_message_id(chat_id=user_id, option='get'))
+            bot.send_photo(user_id, photo=photo)
+            msg = bot.send_message(user_id, text, reply_markup=markup)
+            save_current_message_id(option='save', id=msg.id, chat_id=msg.chat.id)
+        else:
+            return func(message)
 
     return wrapper
 
@@ -74,19 +101,30 @@ def restart(func):
     return wrapper
 
 
-@bot.message_handler(commands=['info', 'users', 'price', 'add', 'del'])
+@bot.message_handler(commands=['info', 'users', 'last', 'price', 'add', 'del', 'ban', 'online'])
 @admin
 def admin_command(message: Message):
     """Отправляет ответы только на команды администратора"""
     match list(map(lambda x: x.strip(), message.text.split(','))):
+        case ['/online']:
+            # Пересылка действий пользователя админу
+            user_id = message.from_user.id
+            global ADMIN_ONLINE
+            if ADMIN_ONLINE[user_id]:
+                ADMIN_ONLINE[user_id] = False
+                bot.send_message(message.from_user.id, "Выключено")
+            else:
+                ADMIN_ONLINE[user_id] = True
+                bot.send_message(message.from_user.id, "Включено")
+
         case ['/info']:
             # Статистика посещений
             text = info_admin()
             bot.send_message(message.from_user.id, text)
-        case ['/price', price] if price.isdigit():
+        case ['/price', *price]:
             # Поменять цену парфюма
             perfume = last_command(user=message, option='get', value='last_perfume')
-            replace_price(perfume=perfume, price=int(price))
+            replace_price(perfume=perfume, price=price)
             bot.send_message(message.from_user.id, "Цена изменена\n/start")
         case ['/add', str(brand), str(name), price] if price.isdigit():
             # Добавить парфюм
@@ -96,9 +134,17 @@ def admin_command(message: Message):
             # Удалить парфюм
             del_perfume(name=name)
             bot.send_message(message.from_user.id, f"Удален парфюм: {name}")
+        case ['/last']:
+            # Показать последних пользователей
+            bot.send_message(message.from_user.id, get_list_users())
         case ['/users']:
             # Показать пользователей
-            bot.send_message(message.from_user.id, get_list_users())
+            users = get_all_users_with_id()
+            bot.send_message(message.chat.id, users)
+        case ['/ban', user_id] if user_id.isdigit():
+            # Бан/Разбан по id
+            current_ban = ban_user(user_id=user_id)
+            bot.send_message(message.from_user.id, f"{user_id} - {current_ban} ")
         case _:
             bot.send_message(message.from_user.id, "Ошибка в команде")
 
@@ -152,12 +198,21 @@ def just_see(message):
 
 
 @bot.callback_query_handler(lambda call: call.data)
+@lifetime
 @restart
 @ban
 def callback(call: CallbackQuery):
     """Обработчик inline кнопок с продукцией"""
     #last_command(user=call, option='save')
     print_user_command(call)
+
+    if ADMIN_ONLINE:
+        # Пересылка действий админу
+        for admin in ADMIN_ONLINE:
+            if ADMIN_ONLINE[admin]:
+                text = f'{(datetime.now() + timedelta(hours=3)).strftime("%d.%m | %H:%M:%S")} | {call.from_user.first_name:^20} | {call.data}'
+                bot.send_message(admin, text)
+
     # Поиск по первой букве, возвращает бренды
     if call.data in ALPHA:
         markup = do_markup(get_brands_with_alpha(call=call), row=2)

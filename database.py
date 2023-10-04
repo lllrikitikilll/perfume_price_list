@@ -6,7 +6,7 @@ from telebot.types import Message, CallbackQuery
 
 def db(func):
     def wrapper(*args, **kwargs):
-        conn = sqlite3.connect('perfume09.db')
+        conn = sqlite3.connect('perfume.db')
         cursor = conn.cursor()
         cursor.execute('''PRAGMA journal_mode=WAL''')
         data = func(cursor=cursor, *args, **kwargs)
@@ -68,7 +68,7 @@ def get_one_perfume(cursor, call: CallbackQuery) -> tuple:
     text += f'Цена за 5мл: {int(perfume[4])} р.\n'
     text += f'Цена за 10мл: {int(perfume[5])} р.\n'
     text += '_'*30+'\n'
-    text += 'Контакт для заказа @fdrpnn'
+    text += 'Контакт для заказа @____'
     return text, perfume[-1]
 
 
@@ -83,8 +83,8 @@ def save_user_in_db(cursor, user: Message | CallbackQuery):
     user = cursor.execute(f"""SELECT id FROM users WHERE users.id = {user_msg.id}""")
     if not user.fetchone():
         cursor.execute(
-            """INSERT INTO users(id, first_name, last_name, username, time_add, baned) VALUES(?,?,?,?,?,?)""",
-            (user_msg.id, user_msg.first_name, user_msg.last_name, user_msg.username, datetime.now(), 0))
+            """INSERT INTO users(id, first_name, last_name, username, time_add, baned, lifetime) VALUES(?,?,?,?,?,?,?)""",
+            (user_msg.id, user_msg.first_name, user_msg.last_name, user_msg.username, datetime.now(), 0, datetime.now()))
     else:
         """Если пользователь есть берем id его сообщения меню"""
         current_msg_id = cursor.execute(f"""SELECT current_msg_id, id FROM users WHERE users.id = {user_msg.id}""")
@@ -103,7 +103,8 @@ def get_ban_list(cursor, user_id):
 def save_current_message_id(cursor, chat_id, id=None, option='save'):
     """Сохранение id последнего сообщения меню"""
     if option == 'save':
-        cursor.execute(f"""UPDATE users SET current_msg_id={id} WHERE users.id = {chat_id}""")
+        lifetime = datetime.now()
+        cursor.execute(f"""UPDATE users SET current_msg_id={id}, lifetime='{lifetime}' WHERE users.id = {chat_id}""")
     elif option == 'get':
         msg_id = cursor.execute(f"""SELECT current_msg_id FROM users WHERE users.id = {chat_id}""")
         return msg_id.fetchone()[0]
@@ -125,3 +126,8 @@ def last_command(cursor, user: CallbackQuery | Message, option: str = 'save', va
     elif option == 'get':
         res = cursor.execute(f"""SELECT {value} FROM users WHERE users.id = {user_id}""")
         return res.fetchone()[0]
+
+@db
+def get_lifetime(cursor, user_id):
+    res = cursor.execute(f"""SELECT lifetime FROM users WHERE users.id = {user_id}""")
+    return res.fetchone()
